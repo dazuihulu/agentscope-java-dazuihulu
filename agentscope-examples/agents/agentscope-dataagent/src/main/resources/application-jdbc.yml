@@ -15,6 +15,15 @@
 # JDBC drivers are bundled at runtime scope; Hibernate auto-detects the
 # dialect from the JDBC URL.
 # ---------------------------------------------------------------------------
+
+DATAAGENT_DB_URL: jdbc:postgresql://localhost:5432/agentscope_dataagent
+DATAAGENT_DB_DRIVER: org.postgresql.Driver
+DATAAGENT_DB_USER: agentscope
+DATAAGENT_DB_PASSWORD: agentscope
+DATAAGENT_SQL_INIT_PLATFORM: postgresql
+DATAAGENT_SQL_INIT_MODE: always
+DATAAGENT_JPA_DDL_AUTO: update
+
 spring:
   datasource:
     url: ${DATAAGENT_DB_URL:jdbc:mysql://localhost:3306/agentscope_dataagent?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC}

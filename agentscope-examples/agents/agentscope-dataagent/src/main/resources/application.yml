@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    active: jdbc
   application:
     name: agentscope-dataagent
   webflux:
@@ -92,7 +94,7 @@ dataagent:
   # ---- DashScope model (used when no Model Spring bean is present) ----
   # Set DASHSCOPE_API_KEY env var or override api-key below.
   dashscope:
-    api-key: ${DASHSCOPE_API_KEY:}
+    api-key: ${DASHSCOPE_API_KEY:sk-ws-H.EYDDMEM.7pWk.MEUCIQDI6jhKBt2AwJBExRAYBo_tb8f5nD6w6ygnaSL8wQKdxAIgFlipMaHa0B_BXR0RDSGwDmCUuz62JW825CeM3NqzkQ0}
     model-name: ${DATAAGENT_MODEL_NAME:qwen-max}
     stream: true
 

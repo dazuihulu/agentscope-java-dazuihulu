@@ -19,19 +19,34 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <parent>
-        <groupId>io.agentscope</groupId>
-        <artifactId>agentscope-examples</artifactId>
-        <version>${revision}</version>
-        <relativePath>../../pom.xml</relativePath>
-    </parent>
+<!--    <parent>-->
+<!--        <groupId>io.agentscope</groupId>-->
+<!--        <artifactId>agentscope-examples</artifactId>-->
+<!--        <version>${revision}</version>-->
+<!--        <relativePath>../../pom.xml</relativePath>-->
+<!--    </parent>-->
 
     <groupId>io.agentscope.examples</groupId>
     <artifactId>agentscope-dataagent</artifactId>
     <packaging>jar</packaging>
-
+    <version>2.0</version>
     <name>AgentScope Java - DataAgent</name>
     <description>Multi-tenant DataAgent product: Spring Boot backend + React SPA built on HarnessAgent. Per-user workspace isolation, distributed deployment, side-channel adapters (ChatUI, DingTalk, Generic Webhook), and admin-approved capability marketplace.</description>
+
+
+    <properties>
+        <spring.boot.version>4.0.4</spring.boot.version>
+        <spring-cloud.version>2025.1.2</spring-cloud.version>
+        <agentscope.dependencies.version>2.0.2</agentscope.dependencies.version>
+        <maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+        <java.version>25</java.version>
+        <lombok.version>1.18.42</lombok.version>
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <maven.compiler.source>25</maven.compiler.source>
+        <maven.compiler.target>25</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
 
     <dependencyManagement>
         <dependencies>
@@ -41,6 +56,40 @@
                 <version>${spring.boot.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+                <exclusions>
+                    <exclusion>
+                        <groupId>redis.clients</groupId>
+                        <artifactId>jedis</artifactId>
+                    </exclusion>
+                </exclusions>
+            </dependency>
+
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-bom</artifactId>
+                <type>pom</type>
+                <scope>import</scope>
+                <version>${agentscope.dependencies.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.agentscope</groupId>
+                <artifactId>agentscope-dependencies-bom</artifactId>
+                <version>${agentscope.dependencies.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+                <exclusions>
+                    <exclusion>
+                        <groupId>redis.clients</groupId>
+                        <artifactId>jedis</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -72,6 +121,10 @@
         <dependency>
             <groupId>io.agentscope</groupId>
             <artifactId>agentscope-extensions-nacos-skill</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.agentscope</groupId>
+            <artifactId>agentscope-extensions-skill-postgresql-repository</artifactId>
         </dependency>
 
         <!-- Nacos maintainer client: required for paged skill listing (SkillMaintainerService) -->
