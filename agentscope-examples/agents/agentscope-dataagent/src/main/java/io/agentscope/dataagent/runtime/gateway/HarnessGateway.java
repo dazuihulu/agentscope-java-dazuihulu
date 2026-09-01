@@ -18,38 +18,28 @@ package io.agentscope.dataagent.runtime.gateway;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
-import io.agentscope.dataagent.runtime.session.PendingCompletion;
-import io.agentscope.dataagent.runtime.session.SessionAgentManager;
-import io.agentscope.dataagent.runtime.session.SessionConstants;
-import io.agentscope.dataagent.runtime.session.SessionEntry;
-import io.agentscope.dataagent.runtime.session.SessionFreshness;
-import io.agentscope.dataagent.runtime.session.SessionFreshnessEvaluator;
-import io.agentscope.dataagent.runtime.session.SessionKind;
-import io.agentscope.dataagent.runtime.session.SessionResetPolicy;
-import io.agentscope.dataagent.runtime.session.SessionView;
-import io.agentscope.dataagent.runtime.session.SpawnResult;
+import io.agentscope.dataagent.runtime.session.*;
 import io.agentscope.dataagent.web.workspace.UserSandboxRegistry;
 import io.agentscope.harness.agent.HarnessAgent;
 import io.agentscope.harness.agent.IsolationScope;
 import io.agentscope.harness.agent.gateway.ChannelManager;
 import io.agentscope.harness.agent.gateway.Gateway;
-import io.agentscope.harness.agent.gateway.LocalSessionTurnGate;
 import io.agentscope.harness.agent.gateway.MsgContext;
 import io.agentscope.harness.agent.gateway.SessionTurnGate;
-import io.agentscope.harness.agent.gateway.TurnBusyException;
-import io.agentscope.harness.agent.gateway.TurnLease;
 import io.agentscope.harness.agent.gateway.channel.OutboundAddress;
 import io.agentscope.harness.agent.sandbox.Sandbox;
 import io.agentscope.harness.agent.sandbox.SandboxContext;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 
 /**
  * Gateway-style gateway: routes inbound turns by {@link MsgContext}, and dispatches subagent
@@ -62,14 +52,14 @@ import reactor.core.scheduler.Schedulers;
  * the correct channel gates.
  *
  * <h2>AgentStateStore routing</h2>
- *
+ * <p>
  * On the first {@link #run} call for a given {@link MsgContext#canonicalKey()}, a MAIN session is
  * registered in the {@link SessionAgentManager}. Subsequent calls for the same key reuse that
  * session. Multiple harness agents may be registered with {@link #registerAgent} for agentId-based
  * routing.
  *
  * <h2>Per-session turn serialization</h2>
- *
+ * <p>
  * Each {@link MsgContext#canonicalKey()} has a fair lock ({@link SessionTurnGate}) so at most one
  * {@code HarnessAgent.call} runs at a time for that key.
  */
@@ -91,13 +81,19 @@ public final class HarnessGateway implements Gateway {
      */
     private volatile UserSandboxRegistry userSandboxRegistry;
 
-    /** Primary agent, set via {@link #bindMainAgent}. Used as routing fallback. */
+    /**
+     * Primary agent, set via {@link #bindMainAgent}. Used as routing fallback.
+     */
     private final AtomicReference<HarnessAgent> mainAgent = new AtomicReference<>();
 
-    /** agentId -> HarnessAgent, populated by {@link #bindMainAgent} and {@link #registerAgent}. */
+    /**
+     * agentId -> HarnessAgent, populated by {@link #bindMainAgent} and {@link #registerAgent}.
+     */
     private final ConcurrentHashMap<String, HarnessAgent> agentRegistry = new ConcurrentHashMap<>();
 
-    /** The agentId registered by the most recent {@link #bindMainAgent} call. */
+    /**
+     * The agentId registered by the most recent {@link #bindMainAgent} call.
+     */
     private volatile String defaultAgentId = null;
 
     /**
@@ -126,7 +122,9 @@ public final class HarnessGateway implements Gateway {
     private final ConcurrentHashMap<String, OutboundAddress> lastRouteBySessionKey =
             new ConcurrentHashMap<>();
 
-    private final SessionTurnGate sessionTurnGate = new LocalSessionTurnGate();
+    // private final SessionTurnGate sessionTurnGate = new LocalSessionTurnGate();
+
+    private final SessionTurnGate sessionTurnGate = new SessionTurnGate();
 
     private HarnessGateway(
             SessionAgentManager sessionAgentManager,
@@ -144,12 +142,12 @@ public final class HarnessGateway implements Gateway {
      * store (if available).
      *
      * @param sessionAgentManager session and agent lifecycle manager
-     * @param channelManager channel registry for outbound delivery; may be null if outbound
-     *     delivery is not needed
+     * @param channelManager      channel registry for outbound delivery; may be null if outbound
+     *                            delivery is not needed
      * @param userSandboxRegistry per-{@code (userId, agentId)} sandbox registry; when non-null,
-     *     each turn injects the user's live sandbox into {@link SandboxContext#getExternalSandbox()}
-     *     so the agent runs against the same container the browser path uses. May be null in
-     *     test setups that don't care about workspace isolation.
+     *                            each turn injects the user's live sandbox into {@link SandboxContext#getExternalSandbox()}
+     *                            so the agent runs against the same container the browser path uses. May be null in
+     *                            test setups that don't care about workspace isolation.
      */
     public static HarnessGateway create(
             SessionAgentManager sessionAgentManager,
@@ -164,23 +162,31 @@ public final class HarnessGateway implements Gateway {
         return gateway;
     }
 
-    /** Creates a gateway without sandbox-injection (legacy callers/tests). */
+    /**
+     * Creates a gateway without sandbox-injection (legacy callers/tests).
+     */
     public static HarnessGateway create(
             SessionAgentManager sessionAgentManager, ChannelManager channelManager) {
         return create(sessionAgentManager, channelManager, null);
     }
 
-    /** Creates a gateway without a channel manager or sandbox registry. */
+    /**
+     * Creates a gateway without a channel manager or sandbox registry.
+     */
     public static HarnessGateway create(SessionAgentManager sessionAgentManager) {
         return create(sessionAgentManager, null, null);
     }
 
-    /** The session agent manager used by this gateway. */
+    /**
+     * The session agent manager used by this gateway.
+     */
     public SessionAgentManager sessionAgentManager() {
         return sessionAgentManager;
     }
 
-    /** The channel manager for outbound delivery, or null if not configured. */
+    /**
+     * The channel manager for outbound delivery, or null if not configured.
+     */
     public ChannelManager channelManager() {
         return channelManager;
     }
@@ -528,27 +534,50 @@ public final class HarnessGateway implements Gateway {
         }
     }
 
+    // private Mono<Msg> withGatedTurn(String gateKey, Supplier<Mono<Msg>> turn) {
+    //     AtomicReference<TurnLease> leaseRef = new AtomicReference<>();
+    //     return Mono.defer(
+    //                     () -> {
+    //                         try {
+    //                             leaseRef.set(sessionTurnGate.acquire(gateKey));
+    //                         } catch (TurnBusyException e) {
+    //                             return Mono.empty();
+    //                         } catch (InterruptedException e) {
+    //                             Thread.currentThread().interrupt();
+    //                             return Mono.error(new IllegalStateException(e));
+    //                         }
+    //                         return turn.get();
+    //                     })
+    //             .doFinally(
+    //                     sig -> {
+    //                         TurnLease lease = leaseRef.get();
+    //                         if (lease != null) {
+    //                             lease.close();
+    //                         }
+    //                     })
+    //             .subscribeOn(Schedulers.boundedElastic());
+    // }
+
     private Mono<Msg> withGatedTurn(String gateKey, Supplier<Mono<Msg>> turn) {
-        AtomicReference<TurnLease> leaseRef = new AtomicReference<>();
-        return Mono.defer(
-                        () -> {
+        AtomicBoolean acquired = new AtomicBoolean(false);
+        return Mono.defer(turn::get)
+                .doOnSubscribe(
+                        s -> {
                             try {
-                                leaseRef.set(sessionTurnGate.acquire(gateKey));
-                            } catch (TurnBusyException e) {
-                                return Mono.empty();
+                                sessionTurnGate.acquire(gateKey);
+                                acquired.set(true);
                             } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
-                                return Mono.error(new IllegalStateException(e));
+                                throw new IllegalStateException(e);
                             }
-                            return turn.get();
                         })
                 .doFinally(
                         sig -> {
-                            TurnLease lease = leaseRef.get();
-                            if (lease != null) {
-                                lease.close();
+                            if (acquired.get()) {
+                                sessionTurnGate.release(gateKey);
                             }
                         })
                 .subscribeOn(Schedulers.boundedElastic());
     }
+
 }
